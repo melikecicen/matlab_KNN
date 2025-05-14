@@ -1,0 +1,49 @@
+
+% Egitim verisi ve etiketleri :
+egitim_verisi = [32 22 300;
+                 45 25 450;
+                 25 20 200;
+                 50 25 550;
+                 55 27 370;
+                 28 22 500;
+                 47 20 280;
+                 30 24 400];
+egitim_etiketleri = ["Evet"; "Hayır"; "Evet"; "Hayır";"Evet";"Hayır";"Evet";"Hayır"]
+
+% Test noktası ve K degeri :
+test_point = [33 22 320]; % Tahmin etmek istedigimiz test noktası
+K = 3; % KNN icin komsu sayısı
+
+
+% Tahmin :
+tahmin_edilen_etiket = knn_siniflandirma(egitim_verisi, egitim_etiketleri, test_point, K);
+fprintf('Test noktası için tahmin edilen sulama ihtiyacı: %s\n', tahmin_edilen_etiket);
+
+% Öklid uzakligi fonksiyonu
+function uzaklik = oklid_uzakligi(x1,x2)
+      %iki vektör arasındaki  öklid uzaklığını hesaplar
+      uzaklik = sqrt (sum ((x1 - x2).^2));
+end
+
+% KNN siniflandirma fonksiyonu
+function tahmin_edilen_etiket = knn_siniflandirma(egitim_verisi, egitim_etiketleri, test_noktasi,K)
+% Egitim seviyesindeki örnek sayi alinir
+ornek_sayisi = size(egitim_verisi, 1);
+
+% Mesafeleri tutacak vektör olusturulur.
+mesafeler = zeros(ornek_sayisi, 1);
+
+% Her eğitim örnegi ile test noktasi arasindaki öklid uzakligi hesaplanir.
+for i = 1:ornek_sayisi
+    mesafeler(i) = oklid_uzakligi(egitim_verisi(i, :), test_noktasi);
+end
+
+% Mesafeler kücükten büyüge siralanır ve indekslerini alinir.
+[~, sirali_indeksler] = sort(mesafeler);
+
+% En yakın K komşunun etiketlerini seçilir
+en_yakin_etiketler = egitim_etiketleri(sirali_indeksler(1:K));
+en_yakin_etiketler = categorical(en_yakin_etiketler);
+% En sık tahmin edilen etiketi tahmin olarak belirleme
+tahmin_edilen_etiket = mode(en_yakin_etiketler);
+end

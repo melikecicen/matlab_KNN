@@ -1,49 +1,116 @@
+ function main()
+    %1. Eğitim verileri ve etiketleri (sınıfı)
+    egitim_verisi = [32 22 300;
+                     45 25 450;
+                     25 20 200;
+                     50 25 550;
+                     55 27 370;
+                     28 22 500;
+                     47 20 280;
+                     30 24 400];
 
-% Egitim verisi ve etiketleri :
-egitim_verisi = [32 22 300;
-                 45 25 450;
-                 25 20 200;
-                 50 25 550;
-                 55 27 370;
-                 28 22 500;
-                 47 20 280;
-                 30 24 400];
-egitim_etiketleri = ["Evet"; "Hayır"; "Evet"; "Hayır";"Evet";"Hayır";"Evet";"Hayır"]
+% Bu verilerin etiketleri: "Evet" = Sulama gerekli, "Hayır" = Gerekli değil
+egitim_etiketleri = ["Evet"; "Hayır"; "Evet";   "Hayır";"Evet";"Hayır";"Evet";"Hayır"];
 
-% Test noktası ve K degeri :
-test_point = [33 22 320]; % Tahmin etmek istedigimiz test noktası
-K = 3; % KNN icin komsu sayısı
+    %2. K değeri (KNN için kaç komşu kullanılacak?)
+    K = 3;
+
+    %3. Leave-One-Out yöntemi: Her veri noktası bir kez test, diğerleri eğitim
+    tahminler = strings(size(egitim_etiketleri));
+    for i = 1:size(egitim_verisi, 1)
+        egitim_data = egitim_verisi;
+        egitim_labels = egitim_etiketleri;
+
+        test_point = egitim_verisi(i, :);      % Şu an test edilen nokta
+        egitim_data(i, :) = [];                % Test edilen noktayı eğitimden çıkar
+        egitim_labels(i) = [];
+
+        % KNN ile tahmin et
+        tahmin = knn_siniflandirma(egitim_data, egitim_labels, test_point, K);
+        tahminler(i) = string(tahmin);
+    end
+
+    %4. Gerçek ve tahmin edilen sınıfları karşılaştır (karışıklık matrisi)
+    gercek = categorical(egitim_etiketleri);
+    tahminler = categorical(tahminler);
+    cm = confusionmat(gercek, tahminler);   % Confusion Matrix
+    etiketler = categories(gercek);         % Sınıf etiketlerini al ("Evet", "Hayır")
+
+    % 5. Karışıklık Matrisi Tablo olarak yazdır
+    disp('Karışıklık Matrisi (etiketli):');
+    T = table;
+    T.Predicted_Evet  = cm(:,1);
+    T.Predicted_Hayir = cm(:,2);
+    T.Properties.RowNames = {'Gercek_Evet', 'Gercek_Hayir'};
+    disp(T);
+
+    % 6. ROC eğrisi ve AUC değeri (modelin ayrım gücünü ölçer)
+    scores = double(tahminler == "Evet");% "Evet" tahminlerini 1, diğerlerini 0 yap
+    labels = double(gercek == "Evet");      % Gerçek "Evet" etiketlerini 1 yap
+    [X, Y, ~, AUC] = perfcurve(labels, scores, 1);  % ROC eğrisi ve AUC hesapla
+
+    %7. Precision, Recall ve F1 Skoru hesapla
+    TP = cm(1,1);   % True Positive: Evet doğru tahmin edilmiş
+    FP = cm(2,1);   % False Positive: Hayır'a Evet denmiş
+    FN = cm(1,2);   % False Negative: Evet'e Hayır denmiş
+
+    Precision = TP / (TP + FP);     % Pozitif tahminlerin doğruluğu
+    Recall = TP / (TP + FN);        % Gerçek pozitifi yakalama oranı
+    F1 = 2 * (Precision * Recall) / (Precision + Recall);  % Dengeli başarı
+
+    % Sonuçları konsola yazdır
+    fprintf('ROC AUC: %.2f\n', AUC);
+    fprintf('Precision: %.2f\n', Precision);
+    fprintf('Recall: %.2f\n', Recall);
+    fprintf('F1 Skoru: %.2f\n', F1);
 
 
-% Tahmin :
-tahmin_edilen_etiket = knn_siniflandirma(egitim_verisi, egitim_etiketleri, test_point, K);
-fprintf('Test noktası için tahmin edilen sulama ihtiyacı: %s\n', tahmin_edilen_etiket);
+    %% === GRAFİKLER ===
 
-% Öklid uzakligi fonksiyonu
+    %1. ROC Eğrisi Grafiği
+    figure('Name','ROC Eğrisi');
+    plot(X, Y, 'b-', 'LineWidth', 2);
+    xlabel('False Positive Rate');
+    ylabel('True Positive Rate');
+    title(sprintf('ROC Eğrisi (AUC = %.2f)', AUC));
+    grid on;
+
+    %2. Karmaşıklık Matrisi 
+    figure('Name','Karışıklık Matrisi');
+    heatmap(etiketler, etiketler, cm, ...
+        'Title','Karışıklık Matrisi', ...
+        'XLabel','Tahmin', 'YLabel','Gerçek', ...
+        'CellLabelFormat','%d');
+
+    %3. Precision, Recall, F1 çubuk grafiği
+    figure('Name','Sınıflandırma Metrikleri');
+    bar([Precision Recall F1], 'FaceColor', [0.2 0.6 0.8]);
+    set(gca, 'XTickLabel', {'Precision', 'Recall', 'F1 Skoru'});
+    ylabel('Değer');
+    ylim([0 1]);
+    title('Sınıflandırma Başarı Metrikleri');
+    grid on;
+end
+
+%% ALT FONKSİYONLAR
+
+% Öklid uzaklığı: 2 vektör arasındaki mesafeyi hesaplar
 function uzaklik = oklid_uzakligi(x1,x2)
-      %iki vektör arasındaki  öklid uzaklığını hesaplar
-      uzaklik = sqrt (sum ((x1 - x2).^2));
+    uzaklik = sqrt(sum((x1 - x2).^2));
 end
 
-% KNN siniflandirma fonksiyonu
-function tahmin_edilen_etiket = knn_siniflandirma(egitim_verisi, egitim_etiketleri, test_noktasi,K)
-% Egitim seviyesindeki örnek sayi alinir
-ornek_sayisi = size(egitim_verisi, 1);
+% KNN sınıflandırıcı: En yakın K komşuya bakarak sınıf tahmini yapar
+function tahmin_edilen_etiket = knn_siniflandirma(egitim_verisi, egitim_etiketleri, test_noktasi, K)
+    ornek_sayisi = size(egitim_verisi, 1);
+    mesafeler = zeros(ornek_sayisi, 1);
 
-% Mesafeleri tutacak vektör olusturulur.
-mesafeler = zeros(ornek_sayisi, 1);
+    for i = 1:ornek_sayisi
+        mesafeler(i) = oklid_uzakligi(egitim_verisi(i, :), test_noktasi);
+    end
 
-% Her eğitim örnegi ile test noktasi arasindaki öklid uzakligi hesaplanir.
-for i = 1:ornek_sayisi
-    mesafeler(i) = oklid_uzakligi(egitim_verisi(i, :), test_noktasi);
+    [~, sirali_indeksler] = sort(mesafeler);  % En yakın komşuların sırala
+    en_yakin_etiketler = egitim_etiketleri(sirali_indeksler(1:K));
+    en_yakin_etiketler = categorical(en_yakin_etiketler);
+    tahmin_edilen_etiket = mode(en_yakin_etiketler);  % En sık görüleni tahmin etmektedir.
 end
 
-% Mesafeler kücükten büyüge siralanır ve indekslerini alinir.
-[~, sirali_indeksler] = sort(mesafeler);
-
-% En yakın K komşunun etiketlerini seçilir
-en_yakin_etiketler = egitim_etiketleri(sirali_indeksler(1:K));
-en_yakin_etiketler = categorical(en_yakin_etiketler);
-% En sık tahmin edilen etiketi tahmin olarak belirleme
-tahmin_edilen_etiket = mode(en_yakin_etiketler);
-end
